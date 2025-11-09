@@ -1,0 +1,323 @@
+@startuml Database Architecture
+
+!define RECTANGLE class
+
+package "Database Core" {
+    class Database {
+        -std::string name_
+        -std::unique_ptr<StorageManager> storage_
+        -std::unique_ptr<TransactionManager> txn_manager_
+        -std::unique_ptr<LockManager> lock_manager_
+        -std::unique_ptr<Catalog> catalog_
+        +executeQuery(query: Query): Result
+        +beginTransaction(isolation: IsolationLevel): TransactionId
+        +commitTransaction(txn_id: TransactionId): bool
+        +rollbackTransaction(txn_id: TransactionId): bool
+        +getActiveTransactions(): std::vector<TransactionId>
+        +getTupleVersions(table: TableId, key: Key): std::vector<TupleVersion>
+        +getLockInfo(): std::vector<LockInfo>
+    }
+    
+    class StorageManager {
+        -std::map<TableId, std::unique_ptr<HeapFile>> heap_files_
+        -PageId next_page_id_
+        +createTable(name: std::string, schema: Schema): TableId
+        +getTable(table_id: TableId): HeapFile*
+        +allocatePage(table_id: TableId): PageId
+        +readPage(table_id: TableId, page_id: PageId): Page*
+        +writePage(table_id: TableId, page_id: PageId, page: Page): void
+    }
+    
+    class HeapFile {
+        -TableId table_id_
+        -std::vector<PageId> pages_
+        -Schema schema_
+        +insertTuple(tuple: Tuple, txn_id: TransactionId): TupleId
+        +updateTuple(tuple_id: TupleId, new_tuple: Tuple, txn_id: TransactionId): TupleId
+        +deleteTuple(tuple_id: TupleId, txn_id: TransactionId): void
+        +getTuple(tuple_id: TupleId): Tuple*
+        +getAllTuples(): std::vector<Tuple>
+        +getTupleVersions(key: Key): std::vector<TupleVersion>
+    }
+    
+    class Page {
+        -PageId page_id_
+        -std::vector<TupleSlot> slots_
+        -uint32_t free_space_
+        -PageHeader header_
+        +insertTuple(tuple: Tuple): TupleSlot*
+        +updateTuple(slot: TupleSlot, new_tuple: Tuple): bool
+        +deleteTuple(slot: TupleSlot): void
+        +getTuple(slot: TupleSlot): Tuple*
+        +hasFreeSpace(size: size_t): bool
+    }
+    
+    class Tuple {
+        -std::vector<Value> values_
+        -TupleHeader header_
+        +getValue(column: ColumnId): Value
+        +setValue(column: ColumnId, value: Value): void
+        +getSize(): size_t
+    }
+    
+    class TupleHeader {
+        -TransactionId xmin_
+        -TransactionId xmax_
+        -TupleId ctid_
+        -bool deleted_
+        -uint16_t infomask_
+        +isVisibleTo(txn_id: TransactionId, snapshot: Snapshot): bool
+        +isDeleted(): bool
+        +getXmin(): TransactionId
+        +getXmax(): TransactionId
+    }
+    
+    class TupleVersion {
+        -TupleId tuple_id_
+        -Tuple tuple_
+        -TransactionId xmin_
+        -TransactionId xmax_
+        -TupleId next_version_
+        +isVisibleTo(txn_id: TransactionId, snapshot: Snapshot): bool
+        +isDead(): bool
+        +getTuple(): Tuple&
+    }
+}
+
+package "Transaction Management" {
+    class TransactionManager {
+        -std::atomic<TransactionId> next_txn_id_
+        -std::map<TransactionId, std::unique_ptr<Transaction>> active_transactions_
+        -std::map<TransactionId, Snapshot> snapshots_
+        +beginTransaction(isolation: IsolationLevel): TransactionId
+        +commitTransaction(txn_id: TransactionId): bool
+        +rollbackTransaction(txn_id: TransactionId): bool
+        +getTransaction(txn_id: TransactionId): Transaction*
+        +getSnapshot(txn_id: TransactionId): Snapshot
+        +isTransactionActive(txn_id: TransactionId): bool
+        +getActiveTransactionIds(): std::vector<TransactionId>
+    }
+    
+    class Transaction {
+        -TransactionId txn_id_
+        -IsolationLevel isolation_level_
+        -TransactionState state_
+        -Snapshot snapshot_
+        -std::vector<Operation> operations_
+        -std::chrono::time_point start_time_
+        +addOperation(op: Operation): void
+        +commit(): bool
+        +rollback(): void
+        +getState(): TransactionState
+        +getSnapshot(): Snapshot&
+    }
+    
+    enum TransactionState {
+        ACTIVE
+        COMMITTED
+        ABORTED
+        IN_COMMIT
+    }
+    
+    enum IsolationLevel {
+        READ_UNCOMMITTED
+        READ_COMMITTED
+        REPEATABLE_READ
+        SERIALIZABLE
+    }
+    
+    class Snapshot {
+        -TransactionId xmin_
+        -TransactionId xmax_
+        -std::set<TransactionId> xip_
+        -std::set<TransactionId> active_txns_
+        +isVisible(tuple_xmin: TransactionId, tuple_xmax: TransactionId): bool
+        +isTransactionActive(txn_id: TransactionId): bool
+    }
+}
+
+package "MVCC & Visibility" {
+    class VisibilityChecker {
+        +isTupleVisible(tuple: Tuple, txn_id: TransactionId, snapshot: Snapshot): bool
+        +checkVisibilityRules(tuple_header: TupleHeader, txn_id: TransactionId, snapshot: Snapshot): bool
+        +isXminVisible(xmin: TransactionId, snapshot: Snapshot): bool
+        +isXmaxVisible(xmax: TransactionId, snapshot: Snapshot): bool
+    }
+    
+    class VacuumManager {
+        -std::atomic<bool> vacuum_running_
+        +identifyDeadTuples(table_id: TableId): std::vector<TupleId>
+        +vacuumTable(table_id: TableId): void
+        +vacuumAll(): void
+        +shouldRunAutovacuum(table_id: TableId): bool
+    }
+}
+
+package "Lock Management" {
+    class LockManager {
+        -std::map<LockableId, std::unique_ptr<Lock>> locks_
+        -std::map<TransactionId, std::vector<Lock*>> txn_locks_
+        -std::map<TransactionId, std::vector<LockRequest>> waiting_queues_
+        +acquireLock(txn_id: TransactionId, lockable: LockableId, lock_type: LockType, mode: LockMode): bool
+        +releaseLock(txn_id: TransactionId, lockable: LockableId): void
+        +releaseAllLocks(txn_id: TransactionId): void
+        +checkDeadlock(txn_id: TransactionId): bool
+        +getLockInfo(): std::vector<LockInfo>
+        +getWaitingTransactions(): std::vector<TransactionId>
+    }
+    
+    class Lock {
+        -LockableId lockable_id_
+        -LockType lock_type_
+        -std::map<TransactionId, LockMode> holders_
+        -std::queue<LockRequest> wait_queue_
+        +acquire(txn_id: TransactionId, mode: LockMode): bool
+        +release(txn_id: TransactionId): void
+        +isHeldBy(txn_id: TransactionId): bool
+        +canGrant(mode: LockMode): bool
+    }
+    
+    class LockRequest {
+        -TransactionId txn_id_
+        -LockMode mode_
+        -std::chrono::time_point request_time_
+    }
+    
+    enum LockType {
+        ROW_LOCK
+        TABLE_LOCK
+        ADVISORY_LOCK
+    }
+    
+    enum LockMode {
+        SHARED
+        EXCLUSIVE
+    }
+    
+    class LockInfo {
+        -LockableId lockable_id_
+        -LockType lock_type_
+        -std::vector<TransactionId> holders_
+        -std::vector<TransactionId> waiters_
+    }
+}
+
+package "Frontend API" {
+    class DatabaseAPI {
+        -std::unique_ptr<Database> db_
+        +connect(connection_string: std::string): bool
+        +disconnect(): void
+        +executeQuery(query: std::string): QueryResult
+        +getActiveTransactions(): std::vector<TransactionInfo>
+        +getTupleVersions(table: std::string, key: Key): std::vector<TupleVersionInfo>
+        +getLockInfo(): std::vector<LockInfo>
+        +getVacuumStatus(): VacuumStatus
+        +subscribeToEvents(callback: EventCallback): void
+    }
+    
+    class QueryResult {
+        -std::vector<std::vector<Value>> rows_
+        -std::vector<std::string> columns_
+        -bool success_
+        -std::string error_message_
+    }
+    
+    class TransactionInfo {
+        -TransactionId txn_id_
+        -IsolationLevel isolation_level_
+        -TransactionState state_
+        -std::chrono::time_point start_time_
+        -std::vector<Operation> operations_
+    }
+    
+    class TupleVersionInfo {
+        -TupleId tuple_id_
+        -TransactionId xmin_
+        -TransactionId xmax_
+        -bool visible_
+        -bool deleted_
+        -std::map<std::string, Value> data_
+    }
+    
+    class EventCallback {
+        +onTransactionStart(txn_id: TransactionId): void
+        +onTransactionCommit(txn_id: TransactionId): void
+        +onTransactionRollback(txn_id: TransactionId): void
+        +onTupleInsert(table: std::string, tuple_id: TupleId): void
+        +onTupleUpdate(table: std::string, tuple_id: TupleId): void
+        +onTupleDelete(table: std::string, tuple_id: TupleId): void
+        +onLockAcquired(txn_id: TransactionId, lockable: LockableId): void
+        +onLockReleased(txn_id: TransactionId, lockable: LockableId): void
+        +onDeadlockDetected(txns: std::vector<TransactionId>): void
+    }
+}
+
+package "Catalog & Schema" {
+    class Catalog {
+        -std::map<TableId, TableMetadata> tables_
+        -std::map<std::string, TableId> table_names_
+        +createTable(name: std::string, schema: Schema): TableId
+        +getTableMetadata(table_id: TableId): TableMetadata*
+        +getTableId(name: std::string): TableId
+        +getAllTables(): std::vector<TableMetadata>
+    }
+    
+    class TableMetadata {
+        -TableId table_id_
+        -std::string name_
+        -Schema schema_
+        -std::vector<IndexMetadata> indexes_
+    }
+    
+    class Schema {
+        -std::vector<Column> columns_
+        +addColumn(column: Column): void
+        +getColumn(column_id: ColumnId): Column*
+        +getColumnCount(): size_t
+    }
+    
+    class Column {
+        -ColumnId column_id_
+        -std::string name_
+        -DataType data_type_
+        -bool nullable_
+        -bool primary_key_
+    }
+}
+
+' Relationships
+Database "1" *-- "1" StorageManager
+Database "1" *-- "1" TransactionManager
+Database "1" *-- "1" LockManager
+Database "1" *-- "1" Catalog
+
+StorageManager "1" *-- "*" HeapFile
+HeapFile "1" *-- "*" Page
+Page "1" *-- "*" Tuple
+Tuple "1" *-- "1" TupleHeader
+
+TransactionManager "1" *-- "*" Transaction
+Transaction "1" *-- "1" Snapshot
+TransactionManager "1" *-- "*" Snapshot
+
+LockManager "1" *-- "*" Lock
+Lock "1" *-- "*" LockRequest
+
+DatabaseAPI "1" *-- "1" Database
+DatabaseAPI ..> TransactionInfo : creates
+DatabaseAPI ..> TupleVersionInfo : creates
+DatabaseAPI ..> QueryResult : creates
+
+Catalog "1" *-- "*" TableMetadata
+TableMetadata "1" *-- "1" Schema
+Schema "1" *-- "*" Column
+
+VisibilityChecker ..> TupleHeader : uses
+VisibilityChecker ..> Snapshot : uses
+VacuumManager ..> HeapFile : uses
+
+Transaction ..> Lock : requests
+LockManager ..> Transaction : manages
+
+@enduml
+
