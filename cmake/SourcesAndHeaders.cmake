@@ -6,6 +6,7 @@ set(sources
     src/database/tuple.cpp
     src/database/page.cpp
     src/database/heap_file.cpp
+    src/database/storage_manager.cpp
 )
 
 set(objcxx_sources
@@ -30,6 +31,7 @@ set(headers
     include/database/tuple.hpp
     include/database/page.hpp
     include/database/heap_file.hpp
+    include/database/storage_manager.hpp
 )
 
 set(test_sources
@@ -40,4 +42,5 @@ set(test_sources
   src/tuple_test.cpp
   src/page_test.cpp
   src/heap_file_test.cpp
+  src/storage_manager_test.cpp
 )
