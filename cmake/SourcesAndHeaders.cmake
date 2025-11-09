@@ -4,6 +4,7 @@ set(sources
     src/database/value.cpp
     src/database/schema.cpp
     src/database/tuple.cpp
+    src/database/page.cpp
 )
 
 set(objcxx_sources
@@ -26,6 +27,7 @@ set(headers
     include/database/value.hpp
     include/database/schema.hpp
     include/database/tuple.hpp
+    include/database/page.hpp
 )
 
 set(test_sources
@@ -34,4 +36,5 @@ set(test_sources
   src/value_test.cpp
   src/schema_test.cpp
   src/tuple_test.cpp
+  src/page_test.cpp
 )
