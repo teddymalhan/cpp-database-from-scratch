@@ -8,6 +8,7 @@ set(sources
     src/database/heap_file.cpp
     src/database/storage_manager.cpp
     src/database/transaction.cpp
+    src/database/transaction_manager.cpp
 )
 
 set(objcxx_sources
@@ -34,6 +35,7 @@ set(headers
     include/database/heap_file.hpp
     include/database/storage_manager.hpp
     include/database/transaction.hpp
+    include/database/transaction_manager.hpp
 )
 
 set(test_sources
@@ -46,4 +48,5 @@ set(test_sources
   src/heap_file_test.cpp
   src/storage_manager_test.cpp
   src/transaction_test.cpp
+  src/transaction_manager_test.cpp
 )
