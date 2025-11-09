@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.15)
 #
 
 project(
-  "Project"
+  "PostgresMvccVisualizer"
   VERSION 0.1.0
   LANGUAGES CXX
 )
@@ -133,12 +133,12 @@ message(STATUS "Added all header and implementation files.\n")
 #
 
 if(${PROJECT_NAME}_BUILD_HEADERS_ONLY)
-  target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_17)
+  target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_20)
 else()
-  target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_17)
+  target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
 
   if(${PROJECT_NAME}_BUILD_EXECUTABLE AND ${PROJECT_NAME}_ENABLE_UNIT_TESTING)
-    target_compile_features(${PROJECT_NAME}_LIB PUBLIC cxx_std_17)
+    target_compile_features(${PROJECT_NAME}_LIB PUBLIC cxx_std_20)
   endif()
 endif()
 include(cmake/CompilerWarnings.cmake)
@@ -156,24 +156,67 @@ include(cmake/Doxygen.cmake)
 # Model project dependencies
 #
 
+# Find GTK4 C++ bindings using pkg-config
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(GTKMM4 REQUIRED gtkmm-4.0)
+
+# Find Threading
+find_package(Threads REQUIRED)
+
 # Identify and link with the specific "packages" the project uses
-#find_package(package_name package_version REQUIRED package_type [other_options])
-#target_link_libraries(
-#  ${PROJECT_NAME}
-#  PUBLIC
-#    dependency1 ...
-#  PRIVATE
-#    dependency2 ...
-#    ${PROJECT_NAME}_PROJECT_OPTIONS
-#    ${PROJECT_NAME}_PROJECT_WARNINGS
-#)
-#if(${PROJECT_NAME}_BUILD_EXECUTABLE AND ${PROJECT_NAME}_ENABLE_UNIT_TESTING)
-#  target_link_libraries(
-#    ${PROJECT_NAME}_LIB
-#    PUBLIC
-#      dependency1 ...
-#  )
-#endif()
+if(${PROJECT_NAME}_BUILD_EXECUTABLE)
+  target_link_directories(
+    ${PROJECT_NAME}
+    PRIVATE
+      ${GTKMM4_LIBRARY_DIRS}
+  )
+  
+  target_link_libraries(
+    ${PROJECT_NAME}
+    PRIVATE
+      ${GTKMM4_LIBRARIES}
+      Threads::Threads
+  )
+  
+  target_include_directories(
+    ${PROJECT_NAME}
+    PRIVATE
+      ${GTKMM4_INCLUDE_DIRS}
+  )
+  
+  target_compile_options(
+    ${PROJECT_NAME}
+    PRIVATE
+      ${GTKMM4_CFLAGS_OTHER}
+  )
+endif()
+
+if(${PROJECT_NAME}_BUILD_EXECUTABLE AND ${PROJECT_NAME}_ENABLE_UNIT_TESTING)
+  target_link_directories(
+    ${PROJECT_NAME}_LIB
+    PRIVATE
+      ${GTKMM4_LIBRARY_DIRS}
+  )
+  
+  target_link_libraries(
+    ${PROJECT_NAME}_LIB
+    PUBLIC
+      ${GTKMM4_LIBRARIES}
+      Threads::Threads
+  )
+  
+  target_include_directories(
+    ${PROJECT_NAME}_LIB
+    PRIVATE
+      ${GTKMM4_INCLUDE_DIRS}
+  )
+  
+  target_compile_options(
+    ${PROJECT_NAME}_LIB
+    PRIVATE
+      ${GTKMM4_CFLAGS_OTHER}
+  )
+endif()
 
 # For Windows, it is necessary to link with the MultiThreaded library.
 # Depending on how the rest of the project's dependencies are linked, it might be necessary
