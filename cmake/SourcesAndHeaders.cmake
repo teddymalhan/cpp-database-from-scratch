@@ -1,6 +1,8 @@
 set(sources
     src/tmp.cpp
     src/main_window_core.cpp
+    src/database/value.cpp
+    src/database/schema.cpp
 )
 
 set(objcxx_sources
@@ -19,8 +21,14 @@ set(headers
     include/project/main_window_core.hpp
     include/project/app_delegate.hpp
     include/project/main_window_controller.hpp
+    include/database/types.hpp
+    include/database/value.hpp
+    include/database/schema.hpp
 )
 
 set(test_sources
   src/tmp_test.cpp
+  src/types_test.cpp
+  src/value_test.cpp
+  src/schema_test.cpp
 )
