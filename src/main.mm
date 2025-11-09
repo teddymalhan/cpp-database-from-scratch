@@ -7,9 +7,9 @@ int main(int argc, char* argv[])
   (void)argv; // Suppress unused parameter warning
   
   @autoreleasepool {
-    NSApplication* app = [NSApplication sharedApplication];
+    NSApplication* const app = [NSApplication sharedApplication];
     
-    AppDelegate* delegate = [[AppDelegate alloc] init];
+    AppDelegate* const delegate = [[AppDelegate alloc] init];
     app.delegate = delegate;
     
     [app run];

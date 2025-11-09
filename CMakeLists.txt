@@ -7,7 +7,7 @@ cmake_minimum_required(VERSION 3.15)
 project(
   "PostgresMvccVisualizer"
   VERSION 0.1.0
-  LANGUAGES CXX
+  LANGUAGES CXX OBJCXX
 )
 
 #
@@ -156,65 +156,33 @@ include(cmake/Doxygen.cmake)
 # Model project dependencies
 #
 
-# Find GTK4 C++ bindings using pkg-config
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(GTKMM4 REQUIRED gtkmm-4.0)
-
 # Find Threading
 find_package(Threads REQUIRED)
 
 # Identify and link with the specific "packages" the project uses
 if(${PROJECT_NAME}_BUILD_EXECUTABLE)
-  target_link_directories(
-    ${PROJECT_NAME}
-    PRIVATE
-      ${GTKMM4_LIBRARY_DIRS}
-  )
-  
-  target_link_libraries(
-    ${PROJECT_NAME}
-    PRIVATE
-      ${GTKMM4_LIBRARIES}
-      Threads::Threads
-  )
-  
-  target_include_directories(
-    ${PROJECT_NAME}
-    PRIVATE
-      ${GTKMM4_INCLUDE_DIRS}
-  )
-  
-  target_compile_options(
-    ${PROJECT_NAME}
-    PRIVATE
-      ${GTKMM4_CFLAGS_OTHER}
-  )
+  # Link against macOS frameworks (AppKit, Foundation, etc.)
+  if(APPLE)
+    find_library(APPKIT_FRAMEWORK AppKit)
+    find_library(FOUNDATION_FRAMEWORK Foundation)
+    find_library(COCOA_FRAMEWORK Cocoa)
+    
+    target_link_libraries(
+      ${PROJECT_NAME}
+      PRIVATE
+        ${APPKIT_FRAMEWORK}
+        ${FOUNDATION_FRAMEWORK}
+        ${COCOA_FRAMEWORK}
+        Threads::Threads
+    )
+  endif()
 endif()
 
 if(${PROJECT_NAME}_BUILD_EXECUTABLE AND ${PROJECT_NAME}_ENABLE_UNIT_TESTING)
-  target_link_directories(
-    ${PROJECT_NAME}_LIB
-    PRIVATE
-      ${GTKMM4_LIBRARY_DIRS}
-  )
-  
   target_link_libraries(
     ${PROJECT_NAME}_LIB
     PUBLIC
-      ${GTKMM4_LIBRARIES}
       Threads::Threads
-  )
-  
-  target_include_directories(
-    ${PROJECT_NAME}_LIB
-    PRIVATE
-      ${GTKMM4_INCLUDE_DIRS}
-  )
-  
-  target_compile_options(
-    ${PROJECT_NAME}_LIB
-    PRIVATE
-      ${GTKMM4_CFLAGS_OTHER}
   )
 endif()
 
